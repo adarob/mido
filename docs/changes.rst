@@ -7,6 +7,9 @@ Release History
 1.1.15 ()
 ^^^^^^^^^^^^^^^^^^^
 
+* The time attribute is now taken into account when comparing
+  messages. See :doc:`messages` for details.
+
 * Added the ability to use file objects as well as filenames when reading,
   writing and saving MIDI files. This allows you to create a MIDI file
   dynamically, possibly *not* using mido, save it to an io.BytesIO, and

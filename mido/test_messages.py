@@ -8,8 +8,15 @@ from .parser import Parser, parse, parse_all
 PY2 = (sys.version_info.major == 2)
 
 def test_msg_equality():
-    args = dict(type='note_on', channel=1, note=2, velocity=3)
-    assert Message(**args) == Message(**args)
+    msg1 = Message('clock', time=0)
+    msg2 = Message('clock', time=0)
+    msg3 = Message('clock', time=1)
+    msg4 = Message('note_on', note=60)
+
+    assert msg1 == msg2
+    assert msg2 != msg3
+    assert msg1 != msg4
+
 
 def test_set_type():
     with raises(AttributeError):

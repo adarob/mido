@@ -42,40 +42,6 @@ Mido supports all message types defined by the MIDI standard. For a
 full list of messages and their attributes, see :doc:`message_types`.
 
 
-Comparison
-----------
-
-To compare two messages::
-
-    >>> Message('note_on', note=60) == Message('note_on', note=60)
-    True
-    >>> Message('note_on', note=60) == Message('note_on', note=120)
-    False
-
-Messages of different types are never equal::
-
-    >>> Message('note_on') == Message('program_change')
-    False
-
-The ``time`` attribute is not included in comparisons::
-
-    >>> a = Message('note_on', time=1)
-    >>> b = Message('note_on', time=2)
-    >>> a == b
-    True
-
-The reason why time is not compared is that it's not regarded as part
-of the messages, but rather something that is tagged into it. To
-include ``time`` in the comparison you can do::
-
-    >>> a = Message('note_on', time=1)
-    >>> b = Message('note_on', time=2)
-    >>> (a, a.time) == (b, b.time)
-    False
-
-Sort ordering of messages is not defined.
-
-
 Converting To Bytes
 -------------------
 
@@ -101,21 +67,51 @@ Each message has a ``time`` attribute, which can be set to any value
 of type ``int`` or ``float`` (and in Python 2 also ``long``). What you
 do with this value is entirely up to you.
 
-Some parts of Mido uses the attribute for special purposes. In MIDI
+Some parts of Mido use the attribute for special purposes. In MIDI
 file tracks, it is used as delta time (in ticks).
 
-The ``time`` attribute is not included in comparisons. (See
-"Comparison" above.)
+.. note::
 
-To sort messages on time you can do::
+    Proir to 1.1.15 the ``time`` attribute was not considered part of
+    the message and was not included in comparison. This led to
+    confusing and unexpected behaviour like this:
 
-    messages.sort(key=lambda message: message.time)
+    .. code-block:: python
 
-or::
+        >>> msg1 = Message('note_on', time=0)
+        >>> msg2 = Message('note_on', time=1)
+        >>> msg1 == msg2
+        True
+        >>> str(msg1) == str(msg2)
+        False
 
-    import operator
+    These now all give the same result. To ignore the time attribute
+    you can either of these:
 
-    messages.sort(key=operator.attrgetter('time'))
+    .. code-block:: python
+
+        >>> msg1.bytes() == msg2.bytes()
+        True
+        >>> msg1.copy(time=0) == msg2.copy(time=0)
+        True
+
+    This means tracks also compare correctly now:
+
+    .. code-block:: python
+
+        >>> track1 == track2
+        True
+
+    The change will break code that relied on ignoring the ``time``
+    attribute. Workarounds to include it will still work::
+
+    .. code-block:: python
+
+        >>> # New behaviour. Now returns False if time attributes differ:
+        >>> msg1 == msg2
+
+        >>> # Still works in all cases:
+        >>> (msg1, msg1.time) == (msg2, msg2.time)
 
 
 System Exclusive Messages
