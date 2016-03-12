@@ -1,6 +1,16 @@
 Mido - MIDI Objects for Python
 ==============================
 
+This experimental branch changes message to include time in comparison. See
+``docs/messages.rst`` for more.
+
+This change may cause code breakage but it has great benefits in
+making message behaviour more consistent and less confusing.
+
+
+Mido
+----
+
 Mido is a library for working with MIDI messages and ports. It's
 designed to be as straight forward and Pythonic as possible:
 
