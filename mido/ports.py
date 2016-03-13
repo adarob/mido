@@ -230,15 +230,19 @@ class BaseOutput(BasePort):
     def send(self, message):
         """Send a message on the port.
 
-        A copy of the message will be sent, so you can safely modify
-        the original message without any unexpected consequences.
+        Unless the messages is frozen a copy of the message will be
+        sent so you can safely modify the original message without
+        any unexpected consequences.
         """
         if not isinstance(message, Message):
             raise TypeError('argument to send() must be a Message')
         elif self.closed:
             raise ValueError('send() called on closed port')
 
-        self._send(message.copy())
+        if message.frozen:
+            self._send(message)
+        else:
+            self._send(message.copy())
 
     def reset(self):
         """Send "All Notes Off" and "Reset All Controllers" on all channels

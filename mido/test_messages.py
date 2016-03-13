@@ -189,7 +189,6 @@ def test_copy():
 
     copy = orig.copy(velocity=1)
     orig.velocity = 1
-
     assert orig == copy
 
 def test_copy_invalid_attribute():
@@ -212,3 +211,13 @@ def test_set_invalid_attribute():
     with raises(AttributeError): msg._spec = valid_spec
     with raises(AttributeError): msg.type = 'continue'
     with raises(AttributeError): msg.invalid = 'banana'
+
+def test_inhashability():
+    msg = Message('clock')
+    with raises(ValueError): hash(msg)
+
+def test_time_ignored():
+    """Time should be ignored in comparisons."""
+    msg1 = Message('clock', time=1)
+    msg2 = Message('clock', time=2)
+    assert msg1.bytes() == msg2.bytes()

@@ -7,24 +7,6 @@ Release History
 1.1.15 ()
 ^^^^^^^^^^^^^^^^^^^
 
-* Changes to ``MidiTrack``:
-
-  * ``MidiTrack()`` now takes a as a parameter an iterable of
-    messages. Examples:
-
-    .. code-block:: python
-
-        MidiTrack(messages)
-        MidiTrack(port.iter_pending())
-        MidiTrack(msg for msg in some_generator)
-
-  * Slicing a ``MidiTrack`` returns a ``MidiTrack``. (It used to
-    return a ``list``.) Example:
-
-    .. code-block:: python
-
-        track[1:10]
-
 * Added the ability to use file objects as well as filenames when reading,
   writing and saving MIDI files. This allows you to create a MIDI file
   dynamically, possibly *not* using mido, save it to an io.BytesIO, and

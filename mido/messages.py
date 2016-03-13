@@ -72,8 +72,7 @@ def get_message_specs():
         MessageSpec(0x80, 'note_off', ('channel', 'note', 'velocity'), 3),
         MessageSpec(0x90, 'note_on', ('channel', 'note', 'velocity'), 3),
         MessageSpec(0xa0, 'polytouch', ('channel', 'note', 'value'), 3),
-        MessageSpec(0xb0, 'control_change',
-                    ('channel', 'control', 'value'), 3),
+        MessageSpec(0xb0, 'control_change', ('channel', 'control', 'value'), 3),
         MessageSpec(0xc0, 'program_change', ('channel', 'program',), 2),
         MessageSpec(0xd0, 'aftertouch', ('channel', 'value',), 2),
         MessageSpec(0xe0, 'pitchwheel', ('channel', 'pitch',), 3),
@@ -260,6 +259,12 @@ def encode_pos(pos):
     return [pos & 0x7f, pos >> 7]
 
 
+class SysexData(tuple):
+    """Special kind of tuple accepts and converts any sequence in +=."""
+    def __iadd__(self, other):
+        return SysexData(self + check_data(other))
+
+
 class BaseMessage(object):
     """Base class for MIDI messages.
 
@@ -277,21 +282,18 @@ class BaseMessage(object):
             a = Message('note_on')
             b = a.copy(velocity=32)
         """
-
         # Make an exact copy of this object.
         klass = self.__class__
-        message = klass.__new__(klass)
-        message.__dict__.update(self.__dict__)
+        copy = klass.__new__(klass)
+        copy.__dict__.update(self.__dict__)
 
         for name, value in overrides.items():
             try:
-                # setattr() is responsible for checking the
-                # name and type of the attribute.
-                setattr(message, name, value)
+                copy.__dict__[name] = copy._check_value(name, value)
             except AttributeError as err:
-                raise ValueError(*err.args)
+                raise ValueError(str(err))
 
-        return message
+        return copy
 
     def bytes(self):
         raise ValueError('bytes() is not implemented in this class')
@@ -310,6 +312,13 @@ class BaseMessage(object):
         """
         return sep.join('{:02X}'.format(byte) for byte in self.bytes())
 
+    @property
+    def frozen(self):
+        return False
+
+    def __hash__(self):
+        raise ValueError('only frozen messages are hashable')
+
     def __eq__(self, other):
         """Compare message to another for equality.
         
@@ -320,10 +329,6 @@ class BaseMessage(object):
 
         return self.bytes() == other.bytes()
 
-class SysexData(tuple):
-    """Special kind of tuple accepts and converts any sequence in +=."""
-    def __iadd__(self, other):
-        return SysexData(self + check_data(other))
 
 class Message(BaseMessage):
     """
@@ -343,32 +348,37 @@ class Message(BaseMessage):
         The first argument is typically the type of message to create,
         for example 'note_on'.
         """
-        try:
-            spec = self._type_lookup[type]
-        except KeyError:
-            raise ValueError('invalid message type {!r}'.format(type))
+        if isinstance(type, BaseMessage):
+            # Copy the other message.
+            self.__dict__.update(type.__dict__)
+            spec = self._spec
+        else:
+            try:
+                spec = self._type_lookup[type]
+            except KeyError:
+                raise ValueError('invalid message type {!r}'.format(type))
 
-        self.__dict__['type'] = type
-        self.__dict__['_spec'] = spec
+            self.__dict__['type'] = type
+            self.__dict__['_spec'] = spec
 
-        # Set default values.
-        for name in spec.arguments:
-            if name == 'velocity':
-                self.__dict__['velocity'] = 0x40
-            elif name == 'data':
-                self.__dict__['data'] = SysexData()
-            else:
-                self.__dict__[name] = 0
-        self.__dict__['time'] = 0
+            # Set default values.
+            for name in spec.arguments:
+                if name == 'velocity':
+                    self.__dict__['velocity'] = 0x40
+                elif name == 'data':
+                    self.__dict__['data'] = SysexData()
+                else:
+                    self.__dict__[name] = 0
+            self.__dict__['time'] = 0
 
-        # Override defaults.
+        # Override values.
         for name, value in arguments.items():
             try:
-                setattr(self, name, value)
+                self.__dict__[name] = self._check_value(name, value)
             except AttributeError as err:
-                raise ValueError(*err.args)
+                raise ValueError(str(err))
 
-    def __setattr__(self, name, value):
+    def _check_value(self, name, value):
         if name in self._spec.settable_attributes:
             try:
                 if name == 'data':
@@ -377,13 +387,16 @@ class Message(BaseMessage):
                     globals()['check_{}'.format(name)](value)
             except KeyError:
                 check_databyte(value)
-
-            self.__dict__[name] = value
         elif name in self.__dict__:
             raise AttributeError('{} attribute is read only'.format(name))
         else:
             raise AttributeError(
                 '{} message has no attribute {}'.format(self.type, name))
+
+        return value
+
+    def __setattr__(self, name, value):
+        self.__dict__[name] = self._check_value(name, value)
 
     def __delattr__(self, name):
         raise AttributeError('attribute cannot be deleted')
@@ -428,6 +441,29 @@ class Message(BaseMessage):
             return len(self.data) + 2
         else:
             return self._spec.length
+
+
+class FrozenMixin(object):
+    @property
+    def frozen(self):
+        return True
+
+    def __setattr__(self, *_):
+        raise ValueError('frozen messages are immutable')
+
+    def __hash__(self):
+        # Todo: This is not very efficient.
+        d = self.__dict__
+        return hash(tuple((name, d[name]) for name in d
+                          if name != 'time' and not name.startswith('_')))
+ 
+    def __repr__(self):
+        # Replace '<message' with '<frozen message'.
+        return '<frozen ' + super().__repr__()[1:]
+
+
+class FrozenMessage(FrozenMixin, Message):
+    pass
 
 
 def build_message(spec, bytes, time=0):

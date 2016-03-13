@@ -7,8 +7,10 @@ designed to be as straight forward and Pythonic as possible.
 
 Creating messages:
 
-    Message(type, **parameters) -- create a new message
-    MetaMessage(type, **parameters) -- create a new meta message
+    Message(type, **parameters)
+    MetaMessage(type, **parameters)
+    FrozenMessage(type, **parameters)
+    FrozenMetaMessage(type, **parameters)
 
 Ports:
 
@@ -92,10 +94,11 @@ from __future__ import absolute_import
 import os
 from .backends.backend import Backend
 from . import ports, sockets
-from .messages import Message
+from .messages import Message, FrozenMessage
 from .messages import parse_string, parse_string_stream, format_as_string
 from .parser import Parser, parse, parse_all
-from .midifiles import MidiFile, MidiTrack, MetaMessage, merge_tracks
+from .midifiles import MidiFile, MidiTrack, merge_tracks
+from .midifiles_meta import MetaMessage, FrozenMetaMessage
 from .midifiles_meta import bpm2tempo, tempo2bpm
 from .syx import read_syx_file, write_syx_file
 

@@ -15,7 +15,7 @@ import sys
 import math
 import struct
 from contextlib import contextmanager
-from .messages import BaseMessage, check_time
+from .messages import BaseMessage, FrozenMixin, check_time
 
 PY2 = (sys.version_info.major == 2)
 
@@ -425,40 +425,44 @@ def _build_meta_message(type_, data):
     spec.decode(message, data)
     return message
 
+
 class MetaMessage(BaseMessage):
     def __init__(self, type_, **kwargs):
         # Todo: allow type_ to be a type byte?
         # Todo: handle unknown type.
-        if isinstance(type_, MetaSpec):
-            self.__dict__['_spec'] = type_
+        if isinstance(type_, MetaMessage):
+            # Copy the other message.
+            self.__dict__.update(type.__dict__)
         else:
-            self.__dict__['_spec'] = _specs[type_]
+            if isinstance(type_, MetaSpec):
+                self.__dict__['_spec'] = type_
+            else:
+                self.__dict__['_spec'] = _specs[type_]
 
-        self.__dict__['type'] = self._spec.type
+            self.__dict__['type'] = self._spec.type
 
-        for name in kwargs:
-            if name == 'time':
-                continue  # Time is always allowed.
+            for name in kwargs:
+                if name == 'time':
+                    continue  # Time is always allowed.
 
-            if name not in self._spec.settable_attributes:
-                raise ValueError(
-                    '{} is not a valid argument for this message type'.format(
-                        name))
+                if name not in self._spec.settable_attributes:
+                    text = '{} is not a valid argument for this message type'
+                    raise ValueError(text.format(name))
 
-        for name, value in zip(self._spec.attributes, self._spec.defaults):
-            self.__dict__[name] = value
-        self.__dict__['time'] = 0
+            for name, value in zip(self._spec.attributes, self._spec.defaults):
+                self.__dict__[name] = value
+            self.__dict__['time'] = 0
 
         for name, value in kwargs.items():
-            setattr(self, name, value)
+            self.__dict__[name] = self._check_value(name, value)
 
-    def __setattr__(self, name, value):
+    def _check_value(self, name, value):
         if name in self._spec.settable_attributes:
             if name == 'time':
                 check_time(value)
             else:
                 self._spec.check(name, value)
-            self.__dict__[name] = value
+            return value
         elif name in self.__dict__:
             raise AttributeError('{} attribute is read only'.format(name))
         else:
@@ -481,6 +485,11 @@ class MetaMessage(BaseMessage):
 
         return '<meta message {}{} time={}>'.format(self.type,
                                                     attributes, self.time)
+
+
+class FrozenMetaMessage(FrozenMixin, MetaMessage):
+    pass
+
 
 class UnknownMetaMessage(MetaMessage):
     def __init__(self, type_byte, data=None, time=0):
