@@ -7,7 +7,7 @@ Module content:
     IOPort -- combined input / output port. Wraps around to normal ports
     MessageBuffer -- pseudo-port that stores messages in a deque
 """
-
+from functools import partial
 from __future__ import unicode_literals
 import threading
 import time
@@ -111,7 +111,6 @@ class BasePort(object):
         return '<{} {} {!r} ({})>'.format(
             state, port_type, name, device_type)
 
-
 class BaseInput(BasePort):
     """Base class for input port.
 
@@ -168,6 +167,12 @@ class BaseInput(BasePort):
             else:
                 yield message
 
+    @synchronized
+    def _blocking_receive_callback(cv, message):
+        self._messages.append(message)
+        cv.notify()
+
+    @synchronized
     def receive(self, block=True):
         """Return the next message.
 
@@ -184,9 +189,8 @@ class BaseInput(BasePort):
         self._check_callback()
 
         # If there is a message pending, return it right away.
-        with self._lock:
-            if self._messages:
-                return self._messages.popleft()
+        if self._messages:
+            return self._messages.popleft()
 
         if self.closed:
             if block:
@@ -195,16 +199,17 @@ class BaseInput(BasePort):
                 return None
 
         while True:
-            with self._lock:
-                self._receive(block=block)
-                if self._messages:
-                    return self._messages.popleft()
-                elif not block:
-                    return None
-                elif self.closed:
-                    raise IOError('port closed during receive()')
-
-            sleep()
+            self._receive(block=block)
+            if self._messages:
+                return self._messages.popleft()
+            elif not block:
+                return None
+            elif self.closed:
+                raise IOError('port closed during receive()')
+            cv = threading.Condition(self._lock)
+            # We also need to put locks on the callback setter.
+            self.callback = partial(self._blocking_receive_callback, cv)
+            cv.wait()
 
     def __iter__(self):
         """Iterate through messages until the port closes."""
@@ -326,7 +331,7 @@ class IOPort(BaseIOPort):
         self.output._send(message)
 
     def _receive(self, block=True):
-        return self.input._receive()
+        return self.input._receive(block)
 
 
 class EchoPort(BaseIOPort):
